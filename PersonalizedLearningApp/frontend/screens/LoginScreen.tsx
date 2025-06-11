@@ -1,26 +1,36 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
-import axios from 'axios';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Validation Error', 'Email and password are required');
+      return;
+    }
+
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
-        email,
-        password,
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
       });
-      // Assuming the API responds with a token
-      if (response.data.token) {
+
+      const data = await response.json();
+
+      if (response.ok) {
         Alert.alert('Login Successful', 'Welcome back!');
-        navigation.navigate('Home'); // Redirect to Home after successful login
+        navigation.navigate('Home');
       } else {
-        Alert.alert('Login Failed', 'Please check your credentials.');
+        Alert.alert('Login Failed', data.message || 'Invalid credentials');
       }
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.message || 'An error occurred during login.');
+      console.error('Login error:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again later.');
     }
   };
 
@@ -32,6 +42,8 @@ const LoginScreen = ({ navigation }) => {
         placeholder="Email"
         value={email}
         onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
       />
       <TextInput
         style={styles.input}

@@ -7,7 +7,7 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
 
   try {
     const verified = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-    req.user = verified;
+    (req as any).user = verified;
     next();
   } catch (error) {
     res.status(400).send('Invalid token');
