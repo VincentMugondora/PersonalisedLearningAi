@@ -1,4 +1,5 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -11,8 +12,8 @@ const api = axios.create({
 });
 
 // Add token to requests if available
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+api.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -71,16 +72,29 @@ export const apiService = {
   auth: {
     login: async (email: string, password: string) => {
       const response = await api.post('/auth/login', { email, password });
+      const { token } = response.data;
+      await AsyncStorage.setItem('token', token);
       return response.data;
     },
     register: async (userData: { email: string; password: string; name: string }) => {
       const response = await api.post('/auth/register', userData);
       return response.data;
     },
+    verifyEmail: async (data: { email: string; code: string }) => {
+      const response = await api.post('/auth/verify-email', data);
+      return response.data;
+    },
+    resendVerificationCode: async (data: { email: string }) => {
+      const response = await api.post('/auth/resend-verification', data);
+      return response.data;
+    },
     getProfile: async () => {
       const response = await api.get('/auth/profile');
       return response.data;
-    }
+    },
+    logout: async () => {
+      await AsyncStorage.removeItem('token');
+    },
   },
 
   // Resource methods
