@@ -14,10 +14,14 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import apiService from '../services/api';
 import { IResource } from '../services/api';
-import SubjectCard from '../components/SubjectCard';
-import ResourceCard from '../components/ResourceCard';
 
-const subjects = [
+type Subject = {
+  id: string;
+  name: string;
+  icon: string;
+};
+
+const subjects: Subject[] = [
   { id: 'mathematics', name: 'Mathematics', icon: 'calculate' },
   { id: 'english', name: 'English', icon: 'menu-book' },
   { id: 'science', name: 'Science', icon: 'science' },
@@ -103,6 +107,82 @@ const HomeScreen: React.FC = () => {
     }
   };
 
+  const renderSubjectCard = (subject: Subject) => (
+    <TouchableOpacity
+      key={subject.id}
+      style={[
+        styles.subjectCard,
+        selectedSubject === subject.id && styles.selectedSubjectCard,
+      ]}
+      onPress={() => handleSubjectPress(subject.id)}
+    >
+      <Icon
+        name={subject.icon as any}
+        size={32}
+        color={selectedSubject === subject.id ? '#fff' : '#4B0082'}
+      />
+      <Text
+        style={[
+          styles.subjectName,
+          selectedSubject === subject.id && styles.selectedSubjectName,
+        ]}
+      >
+        {subject.name}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const renderResourceCard = (resource: IResource) => (
+    <TouchableOpacity
+      key={resource._id}
+      style={styles.resourceCard}
+      onPress={() => handleResourcePress(resource)}
+    >
+      {resource.thumbnailUrl ? (
+        <Image
+          source={{ uri: resource.thumbnailUrl }}
+          style={styles.resourceThumbnail}
+        />
+      ) : (
+        <View style={styles.resourceThumbnailPlaceholder}>
+          <Icon
+            name={
+              resource.type === 'book'
+                ? 'menu-book'
+                : resource.type === 'video'
+                ? 'play-circle'
+                : 'description'
+            }
+            size={32}
+            color="#666"
+          />
+        </View>
+      )}
+      <View style={styles.resourceInfo}>
+        <Text style={styles.resourceTitle} numberOfLines={2}>
+          {resource.title}
+        </Text>
+        <Text style={styles.resourceDescription} numberOfLines={2}>
+          {resource.description}
+        </Text>
+        <View style={styles.resourceMetadata}>
+          <View style={styles.metadataItem}>
+            <Icon name="school" size={16} color="#666" />
+            <Text style={styles.metadataText}>{resource.grade}</Text>
+          </View>
+          <View style={styles.metadataItem}>
+            <Icon name="star" size={16} color="#666" />
+            <Text style={styles.metadataText}>{resource.difficulty}</Text>
+          </View>
+          <View style={styles.metadataItem}>
+            <Icon name="source" size={16} color="#666" />
+            <Text style={styles.metadataText}>{resource.source}</Text>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -110,14 +190,7 @@ const HomeScreen: React.FC = () => {
         horizontal
         showsHorizontalScrollIndicator={false}
       >
-        {subjects.map((subject) => (
-          <SubjectCard
-            key={subject.id}
-            subject={subject}
-            isSelected={selectedSubject === subject.id}
-            onPress={() => handleSubjectPress(subject.id)}
-          />
-        ))}
+        {subjects.map(renderSubjectCard)}
       </ScrollView>
 
       <ScrollView
@@ -131,13 +204,7 @@ const HomeScreen: React.FC = () => {
             <ActivityIndicator size="large" color="#4B0082" />
           </View>
         ) : resources.length > 0 ? (
-          resources.map((resource) => (
-            <ResourceCard
-              key={resource._id}
-              resource={resource}
-              onPress={handleResourcePress}
-            />
-          ))
+          resources.map(renderResourceCard)
         ) : (
           <View style={styles.emptyContainer}>
             <Icon name="search-off" size={48} color="#666" />
@@ -163,9 +230,89 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
   },
+  subjectCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    marginRight: 15,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+    width: 100,
+    height: 100,
+  },
+  selectedSubjectCard: {
+    backgroundColor: '#4B0082',
+  },
+  subjectName: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+  },
+  selectedSubjectName: {
+    color: '#fff',
+  },
   resourcesContainer: {
     flex: 1,
     padding: 15,
+  },
+  resourceCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 15,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  resourceThumbnail: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+  },
+  resourceThumbnailPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resourceInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  resourceTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  resourceDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  resourceMetadata: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  metadataItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+    marginBottom: 4,
+  },
+  metadataText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
   },
   loadingContainer: {
     flex: 1,
