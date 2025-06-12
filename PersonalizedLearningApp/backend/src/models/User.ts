@@ -6,6 +6,8 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   verificationCode: { type: String },
   isVerified: { type: Boolean, default: false },
+}, {
+  timestamps: true // This will add createdAt and updatedAt fields
 });
 
 const User = mongoose.model('User', UserSchema);

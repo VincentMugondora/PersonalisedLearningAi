@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import MainTabs from './MainTabs'; // Make sure path is correct
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import MainTabs from './src/MainTabs'; // Make sure path is correct
 import OnboardingScreen from './screens/OnboardingScreen';
 import UserTypeScreen from './screens/UserTypeScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -11,15 +12,25 @@ import VerificationScreen from './screens/VerificationScreen';
 const Stack = createNativeStackNavigator();
 
 const App = () => {
-  const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
+  const [isOnboardingComplete, setIsOnboardingComplete] = useState<boolean | null>(null);
 
   useEffect(() => {
     const checkOnboarding = async () => {
-      const isComplete = await AsyncStorage.getItem('onboardingComplete');
-      setIsOnboardingComplete(!!isComplete);
+      try {
+        const isComplete = await AsyncStorage.getItem('onboardingComplete');
+        setIsOnboardingComplete(isComplete === 'true');
+      } catch (error) {
+        console.error('Error checking onboarding status:', error);
+        setIsOnboardingComplete(false);
+      }
     };
     checkOnboarding();
   }, []);
+
+  // Show nothing while checking onboarding status
+  if (isOnboardingComplete === null) {
+    return null;
+  }
 
   return (
     <NavigationContainer>

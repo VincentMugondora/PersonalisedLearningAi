@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import User from '../models/User';
 import bcrypt from 'bcrypt';
@@ -7,6 +7,41 @@ import nodemailer from 'nodemailer';
 import { EMAIL_USER, EMAIL_PASS } from '../config/env';
 
 const router = express.Router();
+
+// Debug route to check users (remove in production)
+router.get('/debug/users', asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const users = await User.find({}, { 
+      password: 0,  // Exclude password
+      verificationCode: 0  // Exclude verification code
+    }).lean(); // Use lean() to get plain JavaScript objects
+    
+    console.log('Debug: Found users:', users.length);
+    users.forEach(user => {
+      console.log('Debug: User:', {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        isVerified: user.isVerified,
+        createdAt: (user as any).createdAt // Type assertion for timestamps
+      });
+    });
+
+    res.json({ 
+      count: users.length, 
+      users: users.map(user => ({
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        isVerified: user.isVerified,
+        createdAt: (user as any).createdAt // Type assertion for timestamps
+      }))
+    });
+  } catch (error) {
+    console.error('Debug: Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+}));
 
 // Nodemailer transporter setup with debug enabled
 const transporter = nodemailer.createTransport({
@@ -64,49 +99,99 @@ router.post('/register', asyncHandler(async (req, res) => {
 
 // Verify email route
 router.post('/verify-email', asyncHandler(async (req, res) => {
+  console.log('Verify email attempt:', { 
+    email: req.body.email,
+    code: req.body.code ? '***present***' : 'missing',
+    body: req.body
+  });
+
   const { email, code } = req.body;
+
+  if (!email || !code) {
+    console.log('Verification failed: Missing email or code');
+    res.status(400).json({ 
+      message: 'Email and verification code are required',
+      received: { 
+        email: email ? 'present' : 'missing',
+        code: code ? 'present' : 'missing'
+      }
+    });
+    return;
+  }
+
   const user = await User.findOne({ email });
+  console.log('User found:', user ? 'Yes' : 'No', user ? {
+    isVerified: user.isVerified,
+    hasVerificationCode: !!user.verificationCode
+  } : '');
 
   if (!user) {
+    console.log('Verification failed: User not found');
     res.status(400).json({ message: 'User not found' });
     return;
   }
   if (user.isVerified) {
+    console.log('Verification failed: User already verified');
     res.status(400).json({ message: 'User already verified' });
     return;
   }
+
+  console.log('Verifying code:', {
+    provided: code,
+    stored: user.verificationCode,
+    match: user.verificationCode === code
+  });
 
   if (user.verificationCode === code) {
     user.isVerified = true;
     user.verificationCode = undefined; // clear the code
     await user.save();
+    console.log('Email verification successful');
     res.json({ message: 'Email verified successfully' });
   } else {
+    console.log('Verification failed: Invalid code');
     res.status(400).json({ message: 'Invalid verification code' });
   }
 }));
 
 // Login route (only allow login if verified)
-router.post('/login', asyncHandler(async (req, res) => {
+router.post('/login', asyncHandler(async (req: Request, res: Response) => {
+  console.log('Login attempt:', { email: req.body.email });
+  
   const { email, password } = req.body;
+  
+  if (!email || !password) {
+    console.log('Login failed: Missing email or password');
+    res.status(400).json({ message: 'Email and password are required' });
+    return;
+  }
+
   const user = await User.findOne({ email });
+  console.log('User found:', user ? 'Yes' : 'No', user ? `(verified: ${user.isVerified})` : '');
 
   if (!user) {
+    console.log('Login failed: User not found');
     res.status(400).json({ message: 'Invalid credentials' });
     return;
   }
+  
   if (!user.isVerified) {
+    console.log('Login failed: User not verified');
     res.status(400).json({ message: 'Please verify your email before logging in' });
     return;
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
+  console.log('Password match:', isMatch ? 'Yes' : 'No');
+
   if (!isMatch) {
+    console.log('Login failed: Invalid password');
     res.status(400).json({ message: 'Invalid credentials' });
     return;
   }
 
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET!, { expiresIn: '1h' });
+  console.log('Login successful: Token generated');
   res.json({ token });
 }));
 
