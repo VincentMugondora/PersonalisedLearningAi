@@ -1,95 +1,182 @@
 import express, { Request, Response } from 'express';
-import asyncHandler from 'express-async-handler';
-import resourceService from '../services/resourceService';
 import { authenticateToken, isAdmin } from '../middleware/auth';
+import Resource from '../models/Resource';
+import educationResourceService from '../services/educationResourceService';
 
 const router = express.Router();
 
-// Get resources with filters (public)
-router.get('/', asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const {
-    subject,
-    grade,
-    type,
-    difficulty,
-    tags,
-    limit,
-    skip
-  } = req.query;
+// Public route - Search resources
+router.get('/', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { subject, grade, type, source, limit = 20, skip = 0 } = req.query;
+    
+    const query: any = { isActive: true };
+    if (subject) query.subject = subject;
+    if (grade) query.grade = grade;
+    if (type) query.type = type;
+    if (source) query.source = source;
 
-  const result = await resourceService.searchResources({
-    subject: subject as string,
-    grade: grade as 'O' | 'A',
-    type: type as 'video' | 'document' | 'quiz' | 'practice',
-    difficulty: difficulty as 'beginner' | 'intermediate' | 'advanced',
-    tags: tags ? (tags as string).split(',') : undefined,
-    limit: limit ? parseInt(limit as string) : undefined,
-    skip: skip ? parseInt(skip as string) : undefined
-  });
+    const resources = await Resource.find(query)
+      .sort({ createdAt: -1 })
+      .skip(Number(skip))
+      .limit(Number(limit));
 
-  res.json(result);
-}));
-
-// Get resource recommendations for a user
-router.get('/recommendations', authenticateToken, asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  if (!req.user?.id) {
-    res.status(401).json({ message: 'User not authenticated' });
-    return;
+    res.json(resources);
+  } catch (error) {
+    console.error('Error searching resources:', error);
+    res.status(500).json({ message: 'Error searching resources' });
   }
-  const recommendations = await resourceService.getRecommendations(req.user.id);
-  res.json(recommendations);
-}));
+});
 
-// Fetch resources from YouTube (admin only)
-router.post('/fetch/youtube', authenticateToken, isAdmin, asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const { subject, grade } = req.body;
-  
-  if (!subject || !grade) {
-    res.status(400).json({ message: 'Subject and grade are required' });
-    return;
+// Authenticated route - Get personalized recommendations
+router.get('/recommendations', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: 'User not authenticated' });
+      return;
+    }
+
+    const { subject, grade } = req.query;
+    if (!subject || !grade) {
+      res.status(400).json({ message: 'Subject and grade are required' });
+      return;
+    }
+
+    const recommendations = await educationResourceService.getRecommendations(
+      req.user.id,
+      subject as string,
+      grade as 'O' | 'A'
+    );
+
+    res.json(recommendations);
+  } catch (error) {
+    console.error('Error getting recommendations:', error);
+    res.status(500).json({ message: 'Error getting recommendations' });
   }
+});
 
-  const resources = await resourceService.fetchYouTubeResources(subject, grade);
-  res.json(resources);
-}));
+// Admin route - Fetch resources from MoPSE
+router.post('/fetch/mopse', authenticateToken, isAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { subject, grade } = req.body;
+    if (!subject || !grade) {
+      res.status(400).json({ message: 'Subject and grade are required' });
+      return;
+    }
 
-// Fetch resources from ZIMSEC (admin only)
-router.post('/fetch/zimsec', authenticateToken, isAdmin, asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const { subject, grade } = req.body;
-  
-  if (!subject || !grade) {
-    res.status(400).json({ message: 'Subject and grade are required' });
-    return;
+    const resources = await educationResourceService.fetchResources({
+      subject,
+      grade,
+      source: 'MoPSE'
+    });
+
+    res.json({
+      message: `Successfully fetched ${resources.length} resources from MoPSE`,
+      resources
+    });
+  } catch (error) {
+    console.error('Error fetching MoPSE resources:', error);
+    res.status(500).json({ message: 'Error fetching MoPSE resources' });
   }
+});
 
-  const resources = await resourceService.fetchZimsecResources(subject, grade);
-  res.json(resources);
-}));
+// Admin route - Fetch resources from College Press
+router.post('/fetch/collegepress', authenticateToken, isAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { subject, grade } = req.body;
+    if (!subject || !grade) {
+      res.status(400).json({ message: 'Subject and grade are required' });
+      return;
+    }
 
-// Add a custom resource (admin only)
-router.post('/', authenticateToken, isAdmin, asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const resource = await resourceService.addCustomResource(req.body);
-  res.status(201).json(resource);
-}));
+    const resources = await educationResourceService.fetchResources({
+      subject,
+      grade,
+      source: 'CollegePress'
+    });
 
-// Update a resource (admin only)
-router.put('/:id', authenticateToken, isAdmin, asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const resource = await resourceService.updateResource(req.params.id, req.body);
-  if (!resource) {
-    res.status(404).json({ message: 'Resource not found' });
-    return;
+    res.json({
+      message: `Successfully fetched ${resources.length} resources from College Press`,
+      resources
+    });
+  } catch (error) {
+    console.error('Error fetching College Press resources:', error);
+    res.status(500).json({ message: 'Error fetching College Press resources' });
   }
-  res.json(resource);
-}));
+});
 
-// Delete a resource (admin only)
-router.delete('/:id', authenticateToken, isAdmin, asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const resource = await resourceService.deleteResource(req.params.id);
-  if (!resource) {
-    res.status(404).json({ message: 'Resource not found' });
-    return;
+// Admin route - Fetch resources from Teacha!
+router.post('/fetch/teacha', authenticateToken, isAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { subject, grade } = req.body;
+    if (!subject || !grade) {
+      res.status(400).json({ message: 'Subject and grade are required' });
+      return;
+    }
+
+    const resources = await educationResourceService.fetchResources({
+      subject,
+      grade,
+      source: 'Teacha'
+    });
+
+    res.json({
+      message: `Successfully fetched ${resources.length} resources from Teacha!`,
+      resources
+    });
+  } catch (error) {
+    console.error('Error fetching Teacha! resources:', error);
+    res.status(500).json({ message: 'Error fetching Teacha! resources' });
   }
-  res.json({ message: 'Resource deleted successfully' });
-}));
+});
+
+// Admin route - Add custom resource
+router.post('/', authenticateToken, isAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const resource = new Resource({
+      ...req.body,
+      source: 'Custom'
+    });
+    await resource.save();
+    res.status(201).json(resource);
+  } catch (error) {
+    console.error('Error adding resource:', error);
+    res.status(500).json({ message: 'Error adding resource' });
+  }
+});
+
+// Admin route - Update resource
+router.put('/:id', authenticateToken, isAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const resource = await Resource.findByIdAndUpdate(
+      req.params.id,
+      { ...req.body, source: 'Custom' },
+      { new: true }
+    );
+    if (!resource) {
+      res.status(404).json({ message: 'Resource not found' });
+      return;
+    }
+    res.json(resource);
+  } catch (error) {
+    console.error('Error updating resource:', error);
+    res.status(500).json({ message: 'Error updating resource' });
+  }
+});
+
+// Admin route - Delete resource
+router.delete('/:id', authenticateToken, isAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const resource = await Resource.findByIdAndDelete(req.params.id);
+    if (!resource) {
+      res.status(404).json({ message: 'Resource not found' });
+      return;
+    }
+    res.json({ message: 'Resource deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting resource:', error);
+    res.status(500).json({ message: 'Error deleting resource' });
+  }
+});
 
 export default router; 

@@ -2,15 +2,16 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 // Define the metadata interface for better type safety
 export interface IResourceMetadata {
-  publishedAt?: string;
-  channelId?: string;
-  videoId?: string;
-  duration?: string;
-  viewCount?: number;
-  likeCount?: number;
-  commentCount?: number;
-  tags?: string[];
-  [key: string]: unknown;
+  publisher?: string;
+  year?: number;
+  language?: string;
+  format?: string;
+  price?: number;
+  currency?: string;
+  resourceType?: string;
+  fileSize?: number;
+  downloadCount?: number;
+  rating?: number;
 }
 
 export interface IResource extends Document {
@@ -18,10 +19,10 @@ export interface IResource extends Document {
   description: string;
   subject: string;
   grade: 'O' | 'A';  
-  type: 'video' | 'document' | 'quiz' | 'practice';
+  type: 'book' | 'video' | 'document' | 'practice' | 'quiz';
   url: string;
   thumbnailUrl?: string;
-  source: 'YouTube' | 'ZIMSEC' | 'Custom';
+  source: 'MoPSE' | 'CollegePress' | 'Teacha' | 'YouTube' | 'ZIMSEC';
   author: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   tags: string[];
@@ -68,7 +69,7 @@ const ResourceSchema = new Schema<IResource>({
   type: {
     type: String,
     required: true,
-    enum: ['video', 'document', 'quiz', 'practice']
+    enum: ['book', 'video', 'document', 'practice', 'quiz']
   },
   url: {
     type: String,
@@ -82,7 +83,7 @@ const ResourceSchema = new Schema<IResource>({
   source: {
     type: String,
     required: true,
-    enum: ['YouTube', 'ZIMSEC', 'Custom']
+    enum: ['MoPSE', 'CollegePress', 'Teacha', 'YouTube', 'ZIMSEC']
   },
   author: {
     type: String,
@@ -103,8 +104,16 @@ const ResourceSchema = new Schema<IResource>({
     default: true
   },
   metadata: {
-    type: Schema.Types.Mixed,
-    default: {}
+    publisher: String,
+    year: Number,
+    language: String,
+    format: String,
+    price: Number,
+    currency: String,
+    resourceType: String,
+    fileSize: Number,
+    downloadCount: Number,
+    rating: Number
   }
 }, {
   timestamps: true
@@ -120,7 +129,9 @@ ResourceSchema.index({
 
 // Add compound indexes for common queries
 ResourceSchema.index({ subject: 1, grade: 1 });
-ResourceSchema.index({ type: 1, difficulty: 1 });
-ResourceSchema.index({ source: 1, isActive: 1 });
+ResourceSchema.index({ type: 1 });
+ResourceSchema.index({ source: 1 });
+ResourceSchema.index({ tags: 1 });
+ResourceSchema.index({ isActive: 1 });
 
 export default mongoose.model<IResource>('Resource', ResourceSchema); 

@@ -1,67 +1,56 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json',
-  },
+    'Content-Type': 'application/json'
+  }
 });
 
-// Add request interceptor to include auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+// Add token to requests if available
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
-
-// Add response interceptor to handle common errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+  return config;
+});
 
 // Resource types
-export interface Resource {
-  id: string;
+export type ResourceType = 'book' | 'video' | 'document' | 'quiz' | 'practice';
+export type ResourceSource = 'MoPSE' | 'CollegePress' | 'Teacha' | 'YouTube' | 'Custom';
+export type Grade = 'O' | 'A';
+export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
+
+export interface IResource {
+  _id: string;
   title: string;
   description: string;
-  type: 'video' | 'document' | 'quiz' | 'practice';
+  type: ResourceType;
   url: string;
   thumbnailUrl?: string;
   subject: string;
-  grade: 'O' | 'A';
-  source: 'YouTube' | 'ZIMSEC' | 'Custom';
-  author: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  grade: Grade;
+  source: ResourceSource;
+  author?: string;
+  difficulty: Difficulty;
   tags: string[];
   isActive: boolean;
   metadata?: {
-    publishedAt?: string;
-    channelId?: string;
-    videoId?: string;
-    duration?: string;
-    viewCount?: number;
-    likeCount?: number;
-    commentCount?: number;
-    tags?: string[];
-    [key: string]: unknown;
+    isbn?: string;
+    publisher?: string;
+    year?: number;
+    language?: string;
+    format?: string;
+    price?: number;
+    currency?: string;
+    resourceType?: string;
+    fileSize?: number;
+    downloadCount?: number;
+    rating?: number;
   };
   createdAt: string;
   updatedAt: string;
@@ -69,75 +58,78 @@ export interface Resource {
 
 export interface ResourceSearchParams {
   subject?: string;
-  grade?: 'O' | 'A';
-  type?: 'video' | 'document' | 'quiz' | 'practice';
-  difficulty?: 'beginner' | 'intermediate' | 'advanced';
-  tags?: string[];
+  grade?: Grade;
+  type?: ResourceType;
+  source?: ResourceSource;
   limit?: number;
   skip?: number;
 }
 
 // API service methods
-export const resourceService = {
-  // Search resources
-  searchResources: async (params: ResourceSearchParams) => {
-    const response = await api.get<Resource[]>('/resources', { params });
-    return response.data;
+export const apiService = {
+  // Auth methods
+  auth: {
+    login: async (email: string, password: string) => {
+      const response = await api.post('/auth/login', { email, password });
+      return response.data;
+    },
+    register: async (userData: { email: string; password: string; name: string }) => {
+      const response = await api.post('/auth/register', userData);
+      return response.data;
+    },
+    getProfile: async () => {
+      const response = await api.get('/auth/profile');
+      return response.data;
+    }
   },
 
-  // Get personalized recommendations
-  getRecommendations: async () => {
-    const response = await api.get<Resource[]>('/resources/recommendations');
-    return response.data;
-  },
+  // Resource methods
+  resources: {
+    // Search resources
+    search: async (params: ResourceSearchParams) => {
+      const response = await api.get('/resources', { params });
+      return response.data as IResource[];
+    },
 
-  // Get resource by ID
-  getResource: async (id: string) => {
-    const response = await api.get<Resource>(`/resources/${id}`);
-    return response.data;
-  },
+    // Get recommendations
+    getRecommendations: async (subject: string, grade: Grade) => {
+      const response = await api.get('/resources/recommendations', {
+        params: { subject, grade }
+      });
+      return response.data as IResource[];
+    },
 
-  // Get resources by subject
-  getResourcesBySubject: async (subject: string, grade: 'O' | 'A') => {
-    const response = await api.get<Resource[]>('/resources', {
-      params: { subject, grade }
-    });
-    return response.data;
+    // Admin methods
+    fetchMoPSEResources: async (subject: string, grade: Grade) => {
+      const response = await api.post('/resources/fetch/mopse', { subject, grade });
+      return response.data;
+    },
+
+    fetchCollegePressResources: async (subject: string, grade: Grade) => {
+      const response = await api.post('/resources/fetch/collegepress', { subject, grade });
+      return response.data;
+    },
+
+    fetchTeachaResources: async (subject: string, grade: Grade) => {
+      const response = await api.post('/resources/fetch/teacha', { subject, grade });
+      return response.data;
+    },
+
+    addResource: async (resourceData: Partial<IResource>) => {
+      const response = await api.post('/resources', resourceData);
+      return response.data as IResource;
+    },
+
+    updateResource: async (id: string, resourceData: Partial<IResource>) => {
+      const response = await api.put(`/resources/${id}`, resourceData);
+      return response.data as IResource;
+    },
+
+    deleteResource: async (id: string) => {
+      const response = await api.delete(`/resources/${id}`);
+      return response.data;
+    }
   }
 };
 
-// Auth service methods
-export const authService = {
-  login: async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password });
-    const { token, user } = response.data;
-    localStorage.setItem('token', token);
-    return user;
-  },
-
-  register: async (userData: {
-    email: string;
-    password: string;
-    name: string;
-    grade: 'O' | 'A';
-  }) => {
-    const response = await api.post('/auth/register', userData);
-    return response.data;
-  },
-
-  verifyEmail: async (token: string) => {
-    const response = await api.post('/auth/verify-email', { token });
-    return response.data;
-  },
-
-  logout: () => {
-    localStorage.removeItem('token');
-  },
-
-  getCurrentUser: async () => {
-    const response = await api.get('/auth/me');
-    return response.data;
-  }
-};
-
-export default api; 
+export default apiService; 

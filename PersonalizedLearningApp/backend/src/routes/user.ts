@@ -9,7 +9,7 @@ import { EMAIL_USER, EMAIL_PASS } from '../config/env';
 const router = express.Router();
 
 // Debug route to check users (remove in production)
-router.get('/debug/users', asyncHandler(async (req: Request, res: Response) => {
+router.get('/debug/users', asyncHandler(async (_req: Request, res: Response) => {
   try {
     const users = await User.find({}, { 
       password: 0,  // Exclude password
@@ -59,7 +59,7 @@ console.log('EMAIL_USER:', process.env.EMAIL_USER);
 console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '***present***' : 'undefined');
 
 // Register route with email verification code sending
-router.post('/register', asyncHandler(async (req, res) => {
+router.post('/register', asyncHandler(async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
 
   // Check if user already exists
@@ -98,7 +98,7 @@ router.post('/register', asyncHandler(async (req, res) => {
 }));
 
 // Verify email route
-router.post('/verify-email', asyncHandler(async (req, res) => {
+router.post('/verify-email', asyncHandler(async (req: Request, res: Response) => {
   console.log('Verify email attempt:', { 
     email: req.body.email,
     code: req.body.code ? '***present***' : 'missing',
@@ -196,7 +196,7 @@ router.post('/login', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 // Resend verification code route
-router.post('/resend-verification', asyncHandler(async (req, res) => {
+router.post('/resend-verification', asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.body;
 
   const user = await User.findOne({ email });

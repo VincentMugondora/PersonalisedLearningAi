@@ -1,78 +1,69 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   RefreshControl,
-  Dimensions,
+  Image,
   Linking,
-  Alert
+  Alert,
+  SafeAreaView
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { resourceService, type Resource } from '../services/api';
+import { Ionicons } from '@expo/vector-icons';
+import apiService, { IResource, Grade } from '../services/api';
 
 // Define the navigation type
 type RootStackParamList = {
-  ResourceDetail: { resource: Resource };
+  ResourceDetail: { resource: IResource };
 };
 
 type NavigationProp = {
-  navigate: (screen: keyof RootStackParamList, params: RootStackParamList[keyof RootStackParamList]) => void;
+  navigate: (screen: keyof RootStackParamList, params: any) => void;
 };
 
-// Define types for our data
-type Subject = {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  description: string;
-};
-
-const subjects: Subject[] = [
+// Subject categories with icons and colors
+const subjects = [
   {
-    id: 'mathematics',
+    id: 'Mathematics',
     name: 'Mathematics',
     icon: 'calculator',
     color: '#FF6B6B',
     description: 'Algebra, Calculus, Statistics'
   },
   {
-    id: 'physics',
+    id: 'Physics',
     name: 'Physics',
     icon: 'flash',
     color: '#4ECDC4',
     description: 'Mechanics, Electricity, Waves'
   },
   {
-    id: 'chemistry',
+    id: 'Chemistry',
     name: 'Chemistry',
     icon: 'flask',
     color: '#45B7D1',
     description: 'Organic, Inorganic, Physical'
   },
   {
-    id: 'biology',
+    id: 'Biology',
     name: 'Biology',
     icon: 'leaf',
     color: '#96CEB4',
     description: 'Anatomy, Genetics, Ecology'
   },
   {
-    id: 'english',
+    id: 'English',
     name: 'English',
     icon: 'book',
     color: '#FFEEAD',
     description: 'Literature, Grammar, Composition'
   },
   {
-    id: 'history',
+    id: 'History',
     name: 'History',
     icon: 'time',
     color: '#D4A5A5',
@@ -83,7 +74,7 @@ const subjects: Subject[] = [
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-  const [resources, setResources] = useState<Resource[]>([]);
+  const [resources, setResources] = useState<IResource[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,8 +84,24 @@ const HomeScreen: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await resourceService.getResourcesBySubject(subject, 'O');
-      setResources(data);
+      console.log('Fetching resources for subject:', subject);
+      
+      // First try to get recommendations
+      const recommendations = await apiService.resources.getRecommendations(subject, 'O');
+      console.log('Fetched recommendations:', recommendations);
+      
+      if (recommendations.length === 0) {
+        // If no recommendations, search for resources
+        const searchResults = await apiService.resources.search({
+          subject,
+          grade: 'O',
+          limit: 20
+        });
+        console.log('Fetched search results:', searchResults);
+        setResources(searchResults);
+      } else {
+        setResources(recommendations);
+      }
     } catch (err) {
       console.error('Error fetching resources:', err);
       setError('Failed to load resources. Please try again.');
@@ -105,23 +112,30 @@ const HomeScreen: React.FC = () => {
 
   // Handle subject selection
   const handleSubjectSelect = (subjectId: string) => {
+    console.log('Selected subject:', subjectId);
     setSelectedSubject(subjectId);
     fetchResources(subjectId);
   };
 
   // Handle resource selection
-  const handleResourceSelect = async (resource: Resource) => {
+  const handleResourceSelect = async (resource: IResource) => {
     try {
-      // For YouTube videos, open in the YouTube app or browser
-      if (resource.type === 'video' && resource.source === 'YouTube' && resource.url) {
+      if (resource.type === 'video' && resource.url) {
         const supported = await Linking.canOpenURL(resource.url);
         if (supported) {
           await Linking.openURL(resource.url);
         } else {
           Alert.alert('Error', 'Cannot open this video URL');
         }
+      } else if (resource.type === 'book' && resource.url) {
+        // For books, we might want to open in a PDF viewer or browser
+        const supported = await Linking.canOpenURL(resource.url);
+        if (supported) {
+          await Linking.openURL(resource.url);
+        } else {
+          Alert.alert('Error', 'Cannot open this book URL');
+        }
       } else {
-        // For other resources, navigate to a detail view
         navigation.navigate('ResourceDetail', { resource });
       }
     } catch (err) {
@@ -157,9 +171,9 @@ const HomeScreen: React.FC = () => {
   );
 
   // Render resource card
-  const renderResourceCard = (resource: Resource) => (
+  const renderResourceCard = (resource: IResource) => (
     <TouchableOpacity
-      key={resource.id}
+      key={resource._id}
       style={styles.resourceCard}
       onPress={() => handleResourceSelect(resource)}
     >
@@ -178,12 +192,15 @@ const HomeScreen: React.FC = () => {
         <View style={styles.resourceMeta}>
           <Text style={styles.resourceType}>{resource.type}</Text>
           <Text style={styles.resourceDifficulty}>{resource.difficulty}</Text>
+          <Text style={styles.resourceSource}>{resource.source}</Text>
         </View>
         <View style={styles.resourceFooter}>
-          <Text style={styles.resourceAuthor}>{resource.author}</Text>
-          {resource.metadata?.viewCount && (
+          {resource.author && (
+            <Text style={styles.resourceAuthor}>{resource.author}</Text>
+          )}
+          {resource.metadata?.downloadCount && (
             <Text style={styles.resourceViews}>
-              {resource.metadata.viewCount.toLocaleString()} views
+              {resource.metadata.downloadCount.toLocaleString()} downloads
             </Text>
           )}
         </View>
@@ -193,39 +210,50 @@ const HomeScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.welcomeText}>Welcome to</Text>
-        <Text style={styles.appName}>ZimLearn</Text>
-      </View>
-
       <ScrollView
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        <View style={styles.header}>
+          <Text style={styles.title}>Personalized Learning</Text>
+          <Text style={styles.subtitle}>Choose a subject to get started</Text>
+        </View>
+
         <View style={styles.subjectsContainer}>
-          <Text style={styles.sectionTitle}>Subjects</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.subjectsScroll}
-          >
-            {subjects.map(renderSubjectCard)}
-          </ScrollView>
+          {subjects.map(renderSubjectCard)}
         </View>
 
         {selectedSubject && (
           <View style={styles.resourcesContainer}>
-            <Text style={styles.sectionTitle}>Learning Resources</Text>
+            <Text style={styles.sectionTitle}>
+              {subjects.find(s => s.id === selectedSubject)?.name} Resources
+            </Text>
             {loading ? (
-              <ActivityIndicator size="large" color="#0000ff" />
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0000ff" />
+                <Text style={styles.loadingText}>Loading resources...</Text>
+              </View>
             ) : error ? (
-              <Text style={styles.errorText}>{error}</Text>
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => selectedSubject && fetchResources(selectedSubject)}
+                >
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
             ) : resources.length === 0 ? (
-              <Text style={styles.noResourcesText}>
-                No resources found for this subject
-              </Text>
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  No resources found for this subject yet
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  Check back later for new content
+                </Text>
+              </View>
             ) : (
               resources.map(renderResourceCard)
             )}
@@ -236,49 +264,41 @@ const HomeScreen: React.FC = () => {
   );
 };
 
-const { width } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  header: {
-    padding: 20,
-    backgroundColor: '#4B0082',
-  },
-  welcomeText: {
-    fontSize: 16,
-    color: '#E0E0E0',
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    backgroundColor: '#f5f5f5',
   },
   scrollView: {
     flex: 1,
   },
-  subjectsContainer: {
+  header: {
     padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
-  sectionTitle: {
-    fontSize: 20,
+  title: {
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 15,
     color: '#333',
   },
-  subjectsScroll: {
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 5,
+  },
+  subjectsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 10,
+    justifyContent: 'space-between',
   },
   subjectCard: {
-    width: 120,
-    height: 120,
-    borderRadius: 15,
+    width: '48%',
     padding: 15,
-    marginRight: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 12,
+    marginBottom: 15,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -290,36 +310,40 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   subjectName: {
-    color: 'white',
-    fontSize: 16,
+    color: '#fff',
+    fontSize: 18,
     fontWeight: 'bold',
-    marginTop: 8,
-    textAlign: 'center',
+    marginTop: 10,
   },
   subjectDescription: {
-    color: 'white',
+    color: '#fff',
     fontSize: 12,
     marginTop: 5,
     opacity: 0.9,
   },
   resourcesContainer: {
-    padding: 20,
+    padding: 15,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
   },
   resourceCard: {
-    backgroundColor: 'white',
-    borderRadius: 15,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     marginBottom: 15,
     overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   resourceThumbnail: {
     width: '100%',
-    height: 150,
-    resizeMode: 'cover',
+    height: 200,
   },
   resourceContent: {
     padding: 15,
@@ -356,6 +380,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#7b1fa2',
   },
+  resourceSource: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    fontSize: 12,
+    color: '#2e7d32',
+    marginLeft: 8,
+  },
   resourceFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -369,15 +402,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
   errorText: {
     color: 'red',
     textAlign: 'center',
-    marginTop: 20,
+    marginBottom: 10,
   },
-  noResourcesText: {
+  retryButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
     color: '#666',
+    fontSize: 16,
     textAlign: 'center',
-    marginTop: 20,
+    marginBottom: 5,
+  },
+  emptySubtext: {
+    color: '#999',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
