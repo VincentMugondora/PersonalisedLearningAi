@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { authenticateToken, isAdmin } from '../middleware/auth';
 import Resource from '../models/Resource';
 import educationResourceService from '../services/educationResourceService';
+import sbpResourceService from '../services/sbpResourceService';
 
 const router = express.Router();
 
@@ -176,6 +177,83 @@ router.delete('/:id', authenticateToken, isAdmin, async (req: Request, res: Resp
   } catch (error) {
     console.error('Error deleting resource:', error);
     res.status(500).json({ message: 'Error deleting resource' });
+  }
+});
+
+// Public route - Fetch resources for a subject and grade
+router.post('/fetch', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { subject, grade, source } = req.body;
+    if (!subject || !grade) {
+      res.status(400).json({ message: 'Subject and grade are required' });
+      return;
+    }
+
+    // Validate subject and grade
+    if (!['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'History', 
+          'Geography', 'Commerce', 'Accounts', 'Literature', 'Agriculture', 'Computer Science'].includes(subject)) {
+      res.status(400).json({ message: 'Invalid subject' });
+      return;
+    }
+
+    if (!['O', 'A'].includes(grade)) {
+      res.status(400).json({ message: 'Invalid grade' });
+      return;
+    }
+
+    // Fetch resources from specified source or all sources
+    const resources = await educationResourceService.fetchResources({
+      subject,
+      grade,
+      source: source as 'MoPSE' | 'CollegePress' | 'Teacha' | undefined,
+      limit: 50 // Increased limit for initial fetch
+    });
+
+    res.json({
+      message: `Successfully fetched ${resources.length} resources`,
+      resources
+    });
+  } catch (error) {
+    console.error('Error fetching resources:', error);
+    res.status(500).json({ message: 'Error fetching resources' });
+  }
+});
+
+// Public route - Fetch resources from Secondary Book Press
+router.post('/fetch/sbp', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { subject, grade, type } = req.body;
+    if (!subject || !grade) {
+      res.status(400).json({ message: 'Subject and grade are required' });
+      return;
+    }
+
+    // Validate subject and grade
+    if (!['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'History', 
+          'Geography', 'Commerce', 'Accounts', 'Literature', 'Agriculture', 'Computer Science',
+          'Business Enterprise', 'Food Technology', 'Family Religious Studies', 'Shona', 'Ndebele'].includes(subject)) {
+      res.status(400).json({ message: 'Invalid subject' });
+      return;
+    }
+
+    if (!['O', 'A'].includes(grade)) {
+      res.status(400).json({ message: 'Invalid grade' });
+      return;
+    }
+
+    const resources = await sbpResourceService.fetchResources({
+      subject,
+      grade,
+      type: type as 'textbook' | 'revision-guide' | undefined
+    });
+
+    res.json({
+      message: `Successfully fetched ${resources.length} resources from Secondary Book Press`,
+      resources
+    });
+  } catch (error) {
+    console.error('Error fetching SBP resources:', error);
+    res.status(500).json({ message: 'Error fetching resources from Secondary Book Press' });
   }
 });
 

@@ -1,24 +1,23 @@
 import mongoose from 'mongoose';
+import Resource, { IResource } from '../models/Resource';
 import dotenv from 'dotenv';
-import path from 'path';
-import Resource from '../models/Resource';
 
-// Load environment variables
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config();
 
-const sampleResources = [
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/personalized-learning';
+
+const initialResources: Partial<IResource>[] = [
   {
-    title: 'Mathematics O Level Textbook',
-    description: 'Comprehensive textbook covering all O Level Mathematics topics including Algebra, Geometry, and Statistics',
-    type: 'book',
-    url: 'https://mopse.co.zw/books/mathematics-o-level',
-    thumbnailUrl: 'https://example.com/math-book-cover.jpg',
+    title: 'Introduction to Mathematics O-Level',
+    description: 'A comprehensive guide to O-Level Mathematics covering basic concepts and problem-solving techniques.',
     subject: 'Mathematics',
     grade: 'O',
+    type: 'book',
+    url: 'https://example.com/math-o-level',
     source: 'MoPSE',
-    author: 'Ministry of Primary and Secondary Education',
-    difficulty: 'intermediate',
-    tags: ['Mathematics', 'O Level', 'Textbook', 'MoPSE'],
+    author: 'Ministry of Education',
+    difficulty: 'beginner',
+    tags: ['Mathematics', 'O', 'book', 'MoPSE'],
     isActive: true,
     metadata: {
       publisher: 'MoPSE',
@@ -28,105 +27,74 @@ const sampleResources = [
     }
   },
   {
-    title: 'Physics A Level Study Guide',
-    description: 'Advanced Physics study guide covering Mechanics, Electricity, and Modern Physics',
-    type: 'book',
-    url: 'https://collegepress.co.zw/books/physics-a-level',
-    thumbnailUrl: 'https://example.com/physics-guide-cover.jpg',
-    subject: 'Physics',
+    title: 'Advanced Mathematics A-Level',
+    description: 'Advanced Mathematics concepts for A-Level students, including calculus and complex numbers.',
+    subject: 'Mathematics',
     grade: 'A',
+    type: 'book',
+    url: 'https://example.com/math-a-level',
     source: 'CollegePress',
-    author: 'College Press Publishers',
+    author: 'College Press',
     difficulty: 'advanced',
-    tags: ['Physics', 'A Level', 'Study Guide', 'CollegePress'],
+    tags: ['Mathematics', 'A', 'book', 'CollegePress'],
     isActive: true,
     metadata: {
       publisher: 'College Press',
       year: 2023,
       language: 'English',
-      format: 'PDF',
-      price: 25,
-      currency: 'USD'
+      format: 'PDF'
     }
   },
   {
-    title: 'Chemistry Practical Experiments',
-    description: 'Collection of practical experiments for O Level Chemistry students',
-    type: 'document',
-    url: 'https://teacha.co.zw/resources/chemistry-practicals',
-    thumbnailUrl: 'https://example.com/chemistry-practicals.jpg',
-    subject: 'Chemistry',
-    grade: 'O',
-    source: 'Teacha',
-    author: 'Teacha! Zimbabwe',
-    difficulty: 'intermediate',
-    tags: ['Chemistry', 'O Level', 'Practical', 'Teacha'],
-    isActive: true,
-    metadata: {
-      resourceType: 'Practical Guide',
-      fileSize: 2500000,
-      downloadCount: 1500,
-      rating: 4.5
-    }
-  },
-  {
-    title: 'Biology Past Exam Papers',
-    description: 'Collection of past ZIMSEC Biology exam papers with solutions',
-    type: 'practice',
-    url: 'https://teacha.co.zw/resources/biology-past-papers',
-    thumbnailUrl: 'https://example.com/biology-papers.jpg',
-    subject: 'Biology',
-    grade: 'O',
-    source: 'Teacha',
-    author: 'Teacha! Zimbabwe',
-    difficulty: 'intermediate',
-    tags: ['Biology', 'O Level', 'Past Papers', 'Teacha'],
-    isActive: true,
-    metadata: {
-      resourceType: 'Past Papers',
-      fileSize: 1800000,
-      downloadCount: 2000,
-      rating: 4.8
-    }
-  },
-  {
-    title: 'English Literature Analysis',
-    description: 'In-depth analysis of set books and poems for A Level English',
-    type: 'document',
-    url: 'https://collegepress.co.zw/books/english-literature',
-    thumbnailUrl: 'https://example.com/english-literature.jpg',
+    title: 'O-Level English Literature Guide',
+    description: 'Complete guide to O-Level English Literature, including poetry, prose, and drama analysis.',
     subject: 'English',
-    grade: 'A',
-    source: 'CollegePress',
-    author: 'College Press Publishers',
-    difficulty: 'advanced',
-    tags: ['English', 'A Level', 'Literature', 'CollegePress'],
+    grade: 'O',
+    type: 'book',
+    url: 'https://example.com/english-o-level',
+    source: 'Teacha',
+    author: 'Teacha!',
+    difficulty: 'intermediate',
+    tags: ['English', 'O', 'book', 'Teacha'],
     isActive: true,
     metadata: {
-      publisher: 'College Press',
+      publisher: 'Teacha!',
       year: 2023,
       language: 'English',
-      format: 'PDF',
-      price: 20,
-      currency: 'USD'
+      format: 'PDF'
     }
   },
   {
-    title: 'History of Zimbabwe',
-    description: 'Comprehensive study of Zimbabwean history from pre-colonial to modern times',
-    type: 'book',
-    url: 'https://mopse.co.zw/books/zimbabwe-history',
-    thumbnailUrl: 'https://example.com/history-book.jpg',
-    subject: 'History',
+    title: 'Physics O-Level Video Tutorials',
+    description: 'Video tutorials covering all O-Level Physics topics with practical demonstrations.',
+    subject: 'Physics',
     grade: 'O',
-    source: 'MoPSE',
-    author: 'Ministry of Primary and Secondary Education',
+    type: 'video',
+    url: 'https://youtube.com/playlist?list=physics-o-level',
+    source: 'YouTube',
+    author: 'Physics Tutor ZW',
     difficulty: 'intermediate',
-    tags: ['History', 'O Level', 'Textbook', 'MoPSE'],
+    tags: ['Physics', 'O', 'video', 'YouTube'],
     isActive: true,
     metadata: {
-      publisher: 'MoPSE',
-      year: 2023,
+      resourceType: 'video',
+      language: 'English'
+    }
+  },
+  {
+    title: 'Chemistry A-Level Practice Questions',
+    description: 'Comprehensive set of practice questions for A-Level Chemistry with detailed solutions.',
+    subject: 'Chemistry',
+    grade: 'A',
+    type: 'practice',
+    url: 'https://example.com/chemistry-a-level-practice',
+    source: 'Teacha',
+    author: 'Chemistry Expert',
+    difficulty: 'advanced',
+    tags: ['Chemistry', 'A', 'practice', 'Teacha'],
+    isActive: true,
+    metadata: {
+      resourceType: 'practice',
       language: 'English',
       format: 'PDF'
     }
@@ -136,7 +104,7 @@ const sampleResources = [
 async function seedResources() {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI as string);
+    await mongoose.connect(MONGODB_URI);
     console.log('Connected to MongoDB');
 
     // Clear existing resources
@@ -144,35 +112,17 @@ async function seedResources() {
     console.log('Cleared existing resources');
 
     // Insert new resources
-    const result = await Resource.insertMany(sampleResources);
-    console.log(`Successfully seeded ${result.length} resources`);
+    const resources = await Resource.insertMany(initialResources);
+    console.log(`Successfully seeded ${resources.length} resources`);
 
-    // Log the resources by subject
-    const resourcesBySubject = await Resource.aggregate([
-      {
-        $group: {
-          _id: '$subject',
-          count: { $sum: 1 },
-          resources: { $push: { title: '$title', type: '$type', source: '$source' } }
-        }
-      }
-    ]);
-
-    console.log('\nResources by subject:');
-    resourcesBySubject.forEach(subject => {
-      console.log(`\n${subject._id} (${subject.count} resources):`);
-      subject.resources.forEach((resource: any) => {
-        console.log(`- ${resource.title} (${resource.type}, ${resource.source})`);
-      });
-    });
-
-  } catch (error) {
-    console.error('Error seeding resources:', error);
-  } finally {
+    // Disconnect from MongoDB
     await mongoose.disconnect();
     console.log('Disconnected from MongoDB');
+  } catch (error) {
+    console.error('Error seeding resources:', error);
+    process.exit(1);
   }
 }
 
-// Run the seeding function
+// Run the seed function
 seedResources(); 

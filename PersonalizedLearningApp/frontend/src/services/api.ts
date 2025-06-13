@@ -1,5 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
+import authService from './auth';
+import { Platform } from 'react-native';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -13,17 +16,84 @@ const api = axios.create({
 
 // Add token to requests if available
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  try {
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      // If no token is found, check if we're authenticated
+      if (authService.isAuthenticated()) {
+        // If we think we're authenticated but have no token, clear the auth state
+        await authService.logout();
+      }
+    }
+    return config;
+  } catch (error) {
+    console.error('Error in request interceptor:', error);
+    return config;
   }
-  return config;
 });
 
+// Handle token expiration and unauthorized errors
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Handle unauthorized errors (401)
+    if (error.response?.status === 401) {
+      // Clear the token and auth state
+      await authService.logout();
+      
+      // Show alert to user
+      Alert.alert(
+        'Authentication Required',
+        'Please log in again to continue.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Force reload the app to trigger navigation reset
+              if (Platform.OS === 'web') {
+                window.location.reload();
+              }
+            }
+          }
+        ]
+      );
+    }
+
+    // Handle forbidden errors (403) - token expired
+    if (error.response?.status === 403) {
+      // Clear the token and auth state
+      await authService.logout();
+      
+      // Show alert to user
+      Alert.alert(
+        'Session Expired',
+        'Your session has expired. Please log in again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Force reload the app to trigger navigation reset
+              if (Platform.OS === 'web') {
+                window.location.reload();
+              }
+            }
+          }
+        ]
+      );
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 // Resource types
-export type ResourceType = 'book' | 'video' | 'document' | 'quiz' | 'practice';
-export type ResourceSource = 'MoPSE' | 'CollegePress' | 'Teacha' | 'YouTube' | 'Custom';
-export type Grade = 'O' | 'A';
+export type ResourceType = 'document' | 'quiz' | 'practice' | 'video' | 'book';
+export type ResourceSource = 'MoPSE' | 'CollegePress' | 'Teacha' | 'YouTube' | 'ZimLearn';
+export type Grade = 'A' | 'O' | 'E';
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 
 export interface IResource {
@@ -52,6 +122,14 @@ export interface IResource {
     fileSize?: number;
     downloadCount?: number;
     rating?: number;
+    // Add YouTube-specific metadata
+    duration?: string;
+    channelName?: string;
+    viewCount?: number;
+    likes?: number;
+    uploadDate?: string;
+    playlistId?: string;
+    videoId?: string;
   };
   createdAt: string;
   updatedAt: string;
@@ -105,6 +183,12 @@ export const apiService = {
       return response.data as IResource[];
     },
 
+    // Get favorites
+    getFavorites: async () => {
+      const response = await api.get('/resources/favorites');
+      return response.data as IResource[];
+    },
+
     // Get recommendations
     getRecommendations: async (subject: string, grade: Grade) => {
       const response = await api.get('/resources/recommendations', {
@@ -142,7 +226,74 @@ export const apiService = {
     deleteResource: async (id: string) => {
       const response = await api.delete(`/resources/${id}`);
       return response.data;
-    }
+    },
+
+    async fetchResources(subject: string, grade: Grade, source?: 'MoPSE' | 'CollegePress' | 'Teacha') {
+      const response = await api.post('/resources/fetch', {
+        subject,
+        grade,
+        source
+      });
+      return response.data.resources;
+    },
+
+    async fetchSBPResources(subject: string, grade: Grade, type?: 'textbook' | 'revision-guide') {
+      const response = await api.post('/resources/fetch/sbp', {
+        subject,
+        grade,
+        type
+      });
+      return response.data.resources;
+    },
+
+    // Get video recommendations
+    getVideoRecommendations: async (subject: string, grade: Grade) => {
+      const response = await api.get('/resources/videos/recommendations', {
+        params: { subject, grade }
+      });
+      return response.data as IResource[];
+    },
+
+    // Get video playlist
+    getVideoPlaylist: async (playlistId: string) => {
+      const response = await api.get(`/resources/videos/playlist/${playlistId}`);
+      return response.data as IResource[];
+    },
+
+    // Search videos
+    searchVideos: async (params: {
+      query: string;
+      subject?: string;
+      grade?: Grade;
+      difficulty?: Difficulty;
+    }) => {
+      const response = await api.get('/resources/videos/search', { params });
+      return response.data as IResource[];
+    },
+
+    // Add video resource
+    addVideoResource: async (videoData: {
+      title: string;
+      description: string;
+      url: string;
+      subject: string;
+      grade: Grade;
+      difficulty: Difficulty;
+      tags: string[];
+      metadata: {
+        channelName: string;
+        duration: string;
+        videoId: string;
+        playlistId?: string;
+      };
+    }) => {
+      const response = await api.post('/resources/videos', {
+        ...videoData,
+        type: 'video',
+        source: 'YouTube',
+      });
+      return response.data as IResource;
+    },
   }
 };
 

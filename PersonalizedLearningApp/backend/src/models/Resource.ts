@@ -22,7 +22,7 @@ export interface IResource extends Document {
   type: 'book' | 'video' | 'document' | 'practice' | 'quiz';
   url: string;
   thumbnailUrl?: string;
-  source: 'MoPSE' | 'CollegePress' | 'Teacha' | 'YouTube' | 'ZIMSEC';
+  source: 'MoPSE' | 'CollegePress' | 'Teacha' | 'YouTube' | 'ZIMSEC' | 'SecondaryBookPress';
   author: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   tags: string[];
@@ -83,7 +83,7 @@ const ResourceSchema = new Schema<IResource>({
   source: {
     type: String,
     required: true,
-    enum: ['MoPSE', 'CollegePress', 'Teacha', 'YouTube', 'ZIMSEC']
+    enum: ['MoPSE', 'CollegePress', 'Teacha', 'YouTube', 'ZIMSEC', 'SecondaryBookPress']
   },
   author: {
     type: String,

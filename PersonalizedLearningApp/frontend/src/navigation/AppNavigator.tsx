@@ -1,9 +1,12 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
+import { NavigationContainer, useRoute, RouteProp } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { Platform } from 'react-native';
+import { IResource } from '../services/api';
+import authService, { AuthState } from '../services/auth';
 
 // Screens
 import LoginScreen from '../screens/LoginScreen';
@@ -11,33 +14,75 @@ import RegisterScreen from '../screens/RegisterScreen';
 import VerifyEmailScreen from '../screens/VerifyEmailScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ResourceDetailScreen from '../screens/ResourceDetailScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
+import SplashScreen from '../screens/SplashScreen';
+import UserTypeScreen from '../screens/UserTypeScreen';
+import PasswordSetupScreen from '../screens/PasswordSetupScreen';
+import SearchScreen from '../screens/SearchScreen';
+import FavoritesScreen from '../screens/FavoritesScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import HelpScreen from '../screens/HelpScreen';
+import AboutScreen from '../screens/AboutScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import VideoCourseScreen from '../screens/VideoCourseScreen';
 
 // Types
 export type AuthStackParamList = {
+  Splash: undefined;
+  Onboarding: undefined;
+  UserType: undefined;
   Login: undefined;
-  Register: undefined;
+  Register: { userType: 'student' | 'teacher' };
+  PasswordSetup: { email: string };
   VerifyEmail: { email: string };
 };
 
 export type MainTabParamList = {
   Home: undefined;
+  Search: undefined;
+  Favorites: undefined;
   Profile: undefined;
+  Settings: undefined;
+};
+
+export type RootStackParamList = {
+  Auth: { onboardingCompleted?: boolean };
+  Main: undefined;
+  About: undefined;
+  Help: undefined;
+  Notifications: undefined;
+  ResourceDetail: { resource: IResource };
+  VideoCourse: { resource: IResource };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const MainTab = createBottomTabNavigator<MainTabParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
-const AuthNavigator = () => (
-  <AuthStack.Navigator
-    screenOptions={{
-      headerShown: false,
-    }}
-  >
-    <AuthStack.Screen name="Login" component={LoginScreen} />
-    <AuthStack.Screen name="Register" component={RegisterScreen} />
-    <AuthStack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
-  </AuthStack.Navigator>
-);
+type AuthNavigatorRouteProp = RouteProp<RootStackParamList, 'Auth'>;
+
+const AuthNavigator = () => {
+  const route = useRoute<AuthNavigatorRouteProp>();
+  const onboardingCompleted = route.params?.onboardingCompleted ?? false;
+
+  return (
+    <AuthStack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+      initialRouteName={onboardingCompleted ? 'Login' : 'Onboarding'}
+    >
+      <AuthStack.Screen name="Splash" component={SplashScreen} />
+      <AuthStack.Screen name="Onboarding" component={OnboardingScreen} />
+      <AuthStack.Screen name="UserType" component={UserTypeScreen} />
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="PasswordSetup" component={PasswordSetupScreen} />
+      <AuthStack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
+    </AuthStack.Navigator>
+  );
+};
 
 const MainNavigator = () => (
   <MainTab.Navigator
@@ -49,7 +94,8 @@ const MainNavigator = () => (
         borderTopWidth: 1,
         borderTopColor: '#ddd',
         paddingTop: 5,
-        paddingBottom: 5,
+        paddingBottom: Platform.OS === 'ios' ? 20 : 5,
+        height: Platform.OS === 'ios' ? 85 : 60,
       },
     }}
   >
@@ -64,6 +110,26 @@ const MainNavigator = () => (
       }}
     />
     <MainTab.Screen
+      name="Search"
+      component={SearchScreen}
+      options={{
+        tabBarLabel: 'Search',
+        tabBarIcon: ({ color }) => (
+          <Icon name="search" size={24} color={color} />
+        ),
+      }}
+    />
+    <MainTab.Screen
+      name="Favorites"
+      component={FavoritesScreen}
+      options={{
+        tabBarLabel: 'Favorites',
+        tabBarIcon: ({ color }) => (
+          <Icon name="favorite" size={24} color={color} />
+        ),
+      }}
+    />
+    <MainTab.Screen
       name="Profile"
       component={ProfileScreen}
       options={{
@@ -73,34 +139,145 @@ const MainNavigator = () => (
         ),
       }}
     />
+    <MainTab.Screen
+      name="Settings"
+      component={SettingsScreen}
+      options={{
+        tabBarLabel: 'Settings',
+        tabBarIcon: ({ color }) => (
+          <Icon name="settings" size={24} color={color} />
+        ),
+      }}
+    />
   </MainTab.Navigator>
 );
 
 const AppNavigator = () => {
-  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  const [authState, setAuthState] = useState<AuthState>({
+    isAuthenticated: false,
+    token: null,
+    userType: null,
+    onboardingCompleted: false,
+  });
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  React.useEffect(() => {
-    checkAuthState();
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        console.log('Initializing app...');
+        const state = await authService.initialize();
+        console.log('Auth state initialized:', {
+          isAuthenticated: state.isAuthenticated,
+          hasToken: !!state.token,
+          userType: state.userType,
+          onboardingCompleted: state.onboardingCompleted,
+        });
+        setAuthState(state);
+      } catch (error) {
+        console.error('Error during app initialization:', error);
+        setAuthState({
+          isAuthenticated: false,
+          token: null,
+          userType: null,
+          onboardingCompleted: false,
+        });
+      } finally {
+        setIsInitialized(true);
+      }
+    };
+
+    initializeApp();
+
+    if (Platform.OS === 'web') {
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'token' || e.key === 'onboarding_completed') {
+          console.log('Storage changed:', e.key);
+          authService.initialize().then(setAuthState);
+        }
+      };
+
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
+    }
   }, []);
 
-  const checkAuthState = async () => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      setIsAuthenticated(!!token);
-    } catch (error) {
-      console.error('Error checking auth state:', error);
-      setIsAuthenticated(false);
-    }
-  };
-
-  if (isAuthenticated === null) {
-    // Show loading screen or splash screen
-    return null;
+  if (!isInitialized) {
+    console.log('App is initializing...');
+    return <SplashScreen />;
   }
+
+  console.log('App initialized with auth state:', {
+    isAuthenticated: authState.isAuthenticated,
+    hasToken: !!authState.token,
+    userType: authState.userType,
+    onboardingCompleted: authState.onboardingCompleted,
+  });
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        {!authState.isAuthenticated ? (
+          <RootStack.Screen 
+            name="Auth" 
+            component={AuthNavigator} 
+            initialParams={{ onboardingCompleted: authState.onboardingCompleted }}
+          />
+        ) : (
+          <>
+            <RootStack.Screen name="Main" component={MainNavigator} />
+            <RootStack.Screen 
+              name="About" 
+              component={AboutScreen} 
+              options={{ 
+                headerShown: true, 
+                headerTitle: 'About',
+                headerStyle: { backgroundColor: '#fff' },
+                headerTintColor: '#333'
+              }} 
+            />
+            <RootStack.Screen 
+              name="Help" 
+              component={HelpScreen} 
+              options={{ 
+                headerShown: true, 
+                headerTitle: 'Help & Support',
+                headerStyle: { backgroundColor: '#fff' },
+                headerTintColor: '#333'
+              }} 
+            />
+            <RootStack.Screen 
+              name="Notifications" 
+              component={NotificationsScreen} 
+              options={{ 
+                headerShown: true, 
+                headerTitle: 'Notifications',
+                headerStyle: { backgroundColor: '#fff' },
+                headerTintColor: '#333'
+              }} 
+            />
+            <RootStack.Screen 
+              name="ResourceDetail" 
+              component={ResourceDetailScreen} 
+              options={{ 
+                headerShown: true, 
+                headerTitle: 'Resource Details',
+                headerStyle: { backgroundColor: '#fff' },
+                headerTintColor: '#333'
+              }} 
+            />
+            <RootStack.Screen 
+              name="VideoCourse" 
+              component={VideoCourseScreen} 
+              options={{ 
+                headerShown: true, 
+                headerTitle: 'Video Course',
+                headerStyle: { backgroundColor: '#fff' },
+                headerTintColor: '#333'
+              }} 
+            />
+          </>
+        )}
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 };

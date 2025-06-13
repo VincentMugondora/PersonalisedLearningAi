@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { EMAIL_USER, EMAIL_PASS } from '../config/env';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -224,6 +225,29 @@ router.post('/resend-verification', asyncHandler(async (req: Request, res: Respo
   await transporter.sendMail(mailOptions);
 
   res.json({ message: 'Verification code resent to your email' });
+}));
+
+// Get user profile
+router.get('/profile', authenticateToken, asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.id) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  const user = await User.findById(req.user.id).select('-password -verificationCode');
+  if (!user) {
+    res.status(404).json({ message: 'User not found' });
+    return;
+  }
+
+  res.json({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    isVerified: user.isVerified,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+  });
 }));
 
 export default router;
