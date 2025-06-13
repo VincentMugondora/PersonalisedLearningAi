@@ -10,19 +10,20 @@ import {
   Platform,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { AuthStackParamList, RootStackParamList } from '../navigation/AppNavigator';
+import { AuthStackParamList } from '../navigation/AppNavigator';
 import { MaterialIcons } from '@expo/vector-icons';
 import authService from '../services/auth';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
-type RootNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const LoginScreen: React.FC = () => {
-  const navigation = useNavigation<LoginScreenNavigationProp>();
-  const rootNavigation = useNavigation<RootNavigationProp>();
+type LoginScreenProps = {
+  navigation: LoginScreenNavigationProp;
+};
+
+const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -30,23 +31,34 @@ const LoginScreen: React.FC = () => {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    if (!email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert('Validation Error', 'Email and password are required');
       return;
     }
 
     setIsLoading(true);
     try {
-      // Login will update the auth state, which will trigger AppNavigator to show Main
+      console.log('Attempting login with:', { email });
       await authService.login(email, password);
       console.log('Login successful');
-    } catch (error) {
-      console.error('Login error:', error);
-      Alert.alert('Error', 'Failed to login. Please try again.');
+      // The AppNavigator will handle navigation based on auth state
+    } catch (error: any) {
+      console.error('Login error details:', error);
+      // Handle specific error cases
+      if (error.response?.data?.message === 'Please verify your email before logging in') {
+        Alert.alert(
+          'Email Not Verified',
+          'Please verify your email before logging in.',
+          [
+            {
+              text: 'Resend Verification',
+              onPress: () => navigation.navigate('VerifyEmail', { email }),
+            },
+            { text: 'OK' },
+          ]
+        );
+      } else {
+        Alert.alert('Login Failed', error.response?.data?.message || 'Invalid credentials');
+      }
     } finally {
       setIsLoading(false);
     }

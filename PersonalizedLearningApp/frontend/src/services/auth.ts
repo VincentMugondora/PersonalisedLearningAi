@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from './api';
+import { EventEmitter } from 'events';
 
 const TOKEN_KEY = 'token';
 const ONBOARDING_KEY = 'onboarding_completed';
@@ -22,14 +23,28 @@ class AuthService {
     userType: null,
     onboardingCompleted: false,
   };
+  private eventEmitter: EventEmitter;
 
-  private constructor() {}
+  private constructor() {
+    this.eventEmitter = new EventEmitter();
+  }
 
   public static getInstance(): AuthService {
     if (!AuthService.instance) {
       AuthService.instance = new AuthService();
     }
     return AuthService.instance;
+  }
+
+  // Subscribe to auth state changes
+  subscribe(callback: (state: AuthState) => void) {
+    this.eventEmitter.on('authStateChanged', callback);
+    return () => this.eventEmitter.off('authStateChanged', callback);
+  }
+
+  // Notify subscribers of auth state changes
+  private notifySubscribers() {
+    this.eventEmitter.emit('authStateChanged', this.authState);
   }
 
   async initialize(): Promise<AuthState> {
@@ -47,6 +62,7 @@ class AuthService {
         onboardingCompleted: onboardingCompleted === 'true',
       };
 
+      this.notifySubscribers();
       return this.authState;
     } catch (error) {
       console.error('Error initializing auth state:', error);
@@ -60,6 +76,9 @@ class AuthService {
       const response = await apiService.auth.login(email, password);
       const { token } = response;
       
+      // Store token in AsyncStorage
+      await AsyncStorage.setItem(TOKEN_KEY, token);
+      
       // Update auth state
       this.authState = {
         ...this.authState,
@@ -67,6 +86,7 @@ class AuthService {
         token,
       };
 
+      this.notifySubscribers();
       return this.authState;
     } catch (error) {
       console.error('Login error:', error);
@@ -84,6 +104,7 @@ class AuthService {
         token: null,
       };
 
+      this.notifySubscribers();
       return this.authState;
     } catch (error) {
       console.error('Logout error:', error);
@@ -100,6 +121,7 @@ class AuthService {
         userType,
       };
 
+      this.notifySubscribers();
       return this.authState;
     } catch (error) {
       console.error('Error setting user type:', error);
@@ -116,6 +138,7 @@ class AuthService {
         onboardingCompleted: true,
       };
 
+      this.notifySubscribers();
       return this.authState;
     } catch (error) {
       console.error('Error completing onboarding:', error);

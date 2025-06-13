@@ -188,17 +188,21 @@ const AppNavigator = () => {
 
     initializeApp();
 
-    if (Platform.OS === 'web') {
-      const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === 'token' || e.key === 'onboarding_completed') {
-          console.log('Storage changed:', e.key);
-          authService.initialize().then(setAuthState);
-        }
-      };
+    // Subscribe to auth state changes
+    const unsubscribe = authService.subscribe((state) => {
+      console.log('Auth state changed:', {
+        isAuthenticated: state.isAuthenticated,
+        hasToken: !!state.token,
+        userType: state.userType,
+        onboardingCompleted: state.onboardingCompleted,
+      });
+      setAuthState(state);
+    });
 
-      window.addEventListener('storage', handleStorageChange);
-      return () => window.removeEventListener('storage', handleStorageChange);
-    }
+    // Cleanup subscription on unmount
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   if (!isInitialized) {
