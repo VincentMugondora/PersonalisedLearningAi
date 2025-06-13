@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { NavigationContainer, useRoute, RouteProp } from '@react-navigation/native';
+import React, { useEffect, useState, useRef } from 'react';
+import { NavigationContainer, useRoute, RouteProp, CommonActions, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -160,6 +160,7 @@ const AppNavigator = () => {
     onboardingCompleted: false,
   });
   const [isInitialized, setIsInitialized] = useState(false);
+  const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -196,7 +197,19 @@ const AppNavigator = () => {
         userType: state.userType,
         onboardingCompleted: state.onboardingCompleted,
       });
+      
+      // Update local state
       setAuthState(state);
+
+      // Reset navigation if logged out
+      if (!state.isAuthenticated && navigationRef.current) {
+        navigationRef.current.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Auth' }],
+          })
+        );
+      }
     });
 
     // Cleanup subscription on unmount
@@ -218,7 +231,7 @@ const AppNavigator = () => {
   });
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {!authState.isAuthenticated ? (
           <RootStack.Screen 
