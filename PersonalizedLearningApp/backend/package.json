@@ -11,7 +11,7 @@
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
     "postbuild": "npm run copy-env",
-    "copy-env": "copyfiles -u 1 .env dist/",
+    "copy-env": "copyfiles .env dist/",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "test": "jest",

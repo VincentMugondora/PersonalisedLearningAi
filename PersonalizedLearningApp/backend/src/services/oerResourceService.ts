@@ -4,7 +4,7 @@ import Resource, { IResource } from '../models/Resource';
 // API endpoints
 const OER_COMMONS_API = 'https://api.oercommons.org/v1';
 const CK12_API = 'https://api.ck12.org/v1';
-const KOLIBRI_API = 'https://api.learningequality.org/v1';
+// const KOLIBRI_API = 'https://api.learningequality.org/v1';
 
 interface OERFetchOptions {
   subject: string;

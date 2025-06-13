@@ -1,7 +1,5 @@
-import axios from 'axios';
-import Resource, { IResource } from '../models/Resource';
+import Resource, { IResource, IResourceMetadata } from '../models/Resource';
 import { youtube_v3 } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
 
 // YouTube API setup
 const youtube = new youtube_v3.Youtube({
@@ -21,46 +19,12 @@ interface ResourceSearchParams {
   skip?: number;
 }
 
-// Helper function to safely extract YouTube video data
-const extractYouTubeVideoData = (item: youtube_v3.Schema$SearchResult): Partial<IResource> | null => {
-  const videoId = item.id?.videoId;
-  if (!videoId) {
-    console.warn('Skipping video with no videoId');
-    return null;
-  }
-
-  const snippet = item.snippet;
-  if (!snippet) {
-    console.warn(`Skipping video ${videoId} with no snippet data`);
-    return null;
-  }
-
-  // Get the best available thumbnail URL
-  const thumbnailUrl = snippet.thumbnails?.high?.url || 
-                      snippet.thumbnails?.medium?.url || 
-                      snippet.thumbnails?.default?.url || 
-                      undefined;
-
-  return {
-    title: snippet.title || 'Untitled Video',
-    description: snippet.description || 'No description available',
-    type: 'video' as const,
-    url: `https://www.youtube.com/watch?v=${videoId}`,
-    thumbnailUrl, // Now properly typed as string | undefined
-    source: 'YouTube',
-    author: snippet.channelTitle || 'Unknown Author',
-    difficulty: 'intermediate' as const,
-    isActive: true,
-    // Additional metadata
-    metadata: {
-      publishedAt: snippet.publishedAt || undefined,
-      channelId: snippet.channelId || undefined,
-      videoId
-    }
-  };
-};
-
 class ResourceService {
+  // Helper method to map grade to difficulty
+  private mapGradeToDifficulty(grade: 'O' | 'A'): 'beginner' | 'intermediate' | 'advanced' {
+    return grade === 'O' ? 'beginner' : 'advanced';
+  }
+
   // Search resources with filters
   async searchResources(params: ResourceSearchParams) {
     const query: any = { isActive: true };
@@ -87,53 +51,75 @@ class ResourceService {
     };
   }
 
-  // Fetch resources from YouTube
-  async fetchYouTubeResources(subject: string, grade: 'O' | 'A'): Promise<IResource[]> {
+  // Helper method to safely extract YouTube video data
+  private async fetchYouTubeResources(subject: string, grade: 'O' | 'A'): Promise<IResource[]> {
     try {
-      const searchQuery = `${subject} ${grade} Level Zimbabwe curriculum`;
-      const response = await youtube.search.list({
+      const searchResponse = await youtube.search.list({
         part: ['snippet'],
-        q: searchQuery,
+        q: `${subject} ${grade} level education`,
         type: ['video'],
-        maxResults: 10,
+        maxResults: 20,
         relevanceLanguage: 'en',
-        regionCode: 'ZW'
+        videoEmbeddable: 'true',
+        videoDuration: 'medium'
       });
 
-      if (!response.data.items || response.data.items.length === 0) {
-        console.log('No YouTube videos found for query:', searchQuery);
+      const videos = searchResponse.data.items || [];
+      const videoIds = videos.map(video => video.id?.videoId).filter(Boolean) as string[];
+
+      if (videoIds.length === 0) {
         return [];
       }
 
-      const videos = response.data.items
-        .map((item) => {
-          const videoData = extractYouTubeVideoData(item);
-          if (!videoData) return null;
+      const videoDetailsResponse = await youtube.videos.list({
+        part: ['snippet', 'contentDetails', 'statistics'],
+        id: videoIds
+      });
 
-          return {
-            ...videoData,
-            subject,
-            grade,
-            tags: [subject, grade, 'video', 'youtube'],
-          } as IResource;
-        })
-        .filter((video): video is IResource => video !== null);
+      const resources = videoDetailsResponse.data.items?.map((video: youtube_v3.Schema$Video) => {
+        const snippet = video.snippet!;
+        const videoId = video.id!;
 
-      // Save to database if we have valid videos
-      if (videos.length > 0) {
-        try {
-          await Resource.insertMany(videos, { ordered: false });
-          console.log(`Successfully saved ${videos.length} YouTube videos to database`);
-        } catch (error) {
-          console.error('Error saving videos to database:', error);
-          // Continue execution even if save fails
-        }
+        // Create metadata object with only valid fields
+        const metadata: IResourceMetadata = {
+          publisher: snippet.channelTitle || undefined,
+          year: snippet.publishedAt ? new Date(snippet.publishedAt).getFullYear() : undefined,
+          language: snippet.defaultLanguage || 'en',
+          format: 'video',
+          resourceType: 'video',
+          // Optional fields
+          rating: parseFloat(video.statistics?.likeCount || '0')
+        };
+
+        // Create resource document
+        const resource = new Resource({
+          title: snippet.title!,
+          description: snippet.description || 'No description available',
+          type: 'video',
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          thumbnailUrl: snippet.thumbnails?.high?.url,
+          subject,
+          grade,
+          source: 'YouTube',
+          author: snippet.channelTitle || 'Unknown Author',
+          difficulty: this.mapGradeToDifficulty(grade),
+          tags: [subject, grade, 'video', 'YouTube', ...(snippet.tags || [])],
+          isActive: true,
+          metadata
+        });
+
+        return resource;
+      }) || [];
+
+      // Save resources to database
+      if (resources.length > 0) {
+        await Resource.insertMany(resources, { ordered: false });
       }
 
-      return videos;
+      return resources;
     } catch (error) {
       console.error('Error fetching YouTube resources:', error);
-      throw error;
+      return [];
     }
   }
 
@@ -199,12 +185,68 @@ class ResourceService {
   }
 
   // Get resource recommendations based on user's learning history
-  async getRecommendations(userId: string, limit: number = 5) {
+  async getRecommendations(_userId: string, limit: number = 5) {
     // TODO: Implement recommendation algorithm based on user's learning history
     // For now, return popular resources
     return Resource.find({ isActive: true })
       .sort({ createdAt: -1 })
       .limit(limit);
+  }
+
+  async createResource(data: {
+    title: string;
+    description: string;
+    url: string;
+    type: string;
+    subject: string;
+    grade: string;
+    metadata?: any;
+  }) {
+    try {
+      const { title, description, url, type, subject, grade, metadata: rawMetadata } = data;
+      
+      // Process metadata - only include fields that exist in IResourceMetadata
+      const metadata: IResourceMetadata = {
+        publisher: rawMetadata?.channelTitle || undefined,
+        year: rawMetadata?.publishedAt ? new Date(rawMetadata.publishedAt).getFullYear() : undefined,
+        language: rawMetadata?.language || 'en',
+        format: rawMetadata?.format || 'video',
+        resourceType: type,
+        // Optional fields
+        price: rawMetadata?.price,
+        currency: rawMetadata?.currency,
+        fileSize: rawMetadata?.fileSize,
+        downloadCount: rawMetadata?.downloadCount,
+        rating: rawMetadata?.rating
+      };
+
+      // Create resource with main fields and metadata
+      const resource = new Resource({
+        title,
+        description,
+        url,
+        type,
+        subject,
+        grade,
+        source: rawMetadata?.source || 'YouTube',
+        author: rawMetadata?.channelTitle || 'Unknown Author',
+        difficulty: rawMetadata?.difficulty || 'intermediate',
+        tags: rawMetadata?.tags || [subject, grade, type],
+        isActive: true,
+        metadata
+      });
+
+      await resource.save();
+      return resource;
+    } catch (error) {
+      console.error('Error creating resource:', error);
+      throw error;
+    }
+  }
+
+  // Add a method to fetch and sync YouTube resources
+  async syncYouTubeResources(subject: string, grade: 'O' | 'A'): Promise<IResource[]> {
+    return this.fetchYouTubeResources(subject, grade);
   }
 }
 
