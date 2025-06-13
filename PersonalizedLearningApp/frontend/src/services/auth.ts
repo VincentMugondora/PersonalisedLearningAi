@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService from './api';
-import { EventEmitter } from 'events';
 
 const TOKEN_KEY = 'token';
 const ONBOARDING_KEY = 'onboarding_completed';
@@ -13,6 +12,28 @@ interface AuthState {
   token: string | null;
   userType: UserType | null;
   onboardingCompleted: boolean;
+}
+
+// Simple event emitter implementation
+class EventEmitter {
+  private listeners: { [key: string]: Function[] } = {};
+
+  on(event: string, callback: Function) {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event].push(callback);
+  }
+
+  off(event: string, callback: Function) {
+    if (!this.listeners[event]) return;
+    this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+  }
+
+  emit(event: string, data?: any) {
+    if (!this.listeners[event]) return;
+    this.listeners[event].forEach(callback => callback(data));
+  }
 }
 
 class AuthService {
