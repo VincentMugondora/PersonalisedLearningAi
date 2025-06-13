@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import apiService from '../services/api';
+import authService from '../services/auth';
 import { MainTabParamList } from '../navigation/AppNavigator';
 
 interface UserProfile {
@@ -74,7 +75,7 @@ const ProfileScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiService.auth.logout();
+              await authService.logout();
               // Navigation will be handled by AppNavigator based on auth state
             } catch (error) {
               console.error('Logout error:', error);

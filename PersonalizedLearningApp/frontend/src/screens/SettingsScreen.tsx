@@ -19,6 +19,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList, RootStackParamList } from '../navigation/AppNavigator';
+import authService from '../services/auth';
 
 type SettingsScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Settings'>,
@@ -99,19 +100,29 @@ const SettingsScreen: React.FC = () => {
   }, []);
 
   const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem('token');
-      // Reset the navigation state to trigger a re-render of AppNavigator
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'Auth' }],
-        })
-      );
-    } catch (error) {
-      console.error('Error during logout:', error);
-      Alert.alert('Error', 'Failed to logout. Please try again.');
-    }
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await authService.logout();
+              // Navigation will be handled by AppNavigator based on auth state
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderSettingItem = (

@@ -32,7 +32,13 @@ class EventEmitter {
 
   emit(event: string, data?: any) {
     if (!this.listeners[event]) return;
-    this.listeners[event].forEach(callback => callback(data));
+    this.listeners[event].forEach(callback => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error('Error in event listener:', error);
+      }
+    });
   }
 }
 
@@ -117,15 +123,26 @@ class AuthService {
 
   async logout(): Promise<AuthState> {
     try {
-      await AsyncStorage.removeItem(TOKEN_KEY);
+      // Clear all auth-related storage
+      await Promise.all([
+        AsyncStorage.removeItem(TOKEN_KEY),
+        AsyncStorage.removeItem(USER_TYPE_KEY),
+      ]);
       
+      // Update auth state
       this.authState = {
-        ...this.authState,
         isAuthenticated: false,
         token: null,
+        userType: null,
+        onboardingCompleted: this.authState.onboardingCompleted, // Preserve onboarding state
       };
 
+      // Notify subscribers
       this.notifySubscribers();
+      
+      // Force a small delay to ensure state updates are processed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       return this.authState;
     } catch (error) {
       console.error('Logout error:', error);
